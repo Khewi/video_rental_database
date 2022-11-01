@@ -1,0 +1,138 @@
+--Table Creation for Detailed and Summary Tables
+
+--Detailed Table 
+--The rental details table will show the details about the staff including location, name, and rentals.
+
+CREATE TABLE rental_details(
+	rental_id int PRIMARY KEY;
+	rental_date TIMESTAMP;
+	store_id int;
+	staff_id int;
+	first_name varchar (50);
+	last_name varchar (50);
+	manager_staff_id int
+	);
+	
+
+---this will allow the filled detailed table to be viewed. 	
+
+SELECT *
+FROM rental_details;
+	
+--Summary Table
+--The rental summary table will give high level summary on the empolyee and their total rentals.
+
+CREATE TABLE staff_rental_summary(
+	staff_id varchar (50) PRIMARY KEY;
+	staff_full_name varchar (100);
+	rental_total int;
+	manager_staff_id int;
+	store_id int;
+	);
+
+--This will allow the filled summary table to be visualized	
+
+SELECT * 
+FROM staff_rental_summary;
+
+---------------------------------------------------------------------------------------------------------
+
+--The INSERT INTO function is going to being extracting data into the rental details and rental summary tables. 
+
+INSERT INTO rental_details(
+	rental_id, store_id, staff_id, first_name, last_name, email, manager_staff_id)
+SELECT r.rental_id, r.rental_date, s.store_id, s.staff_id, s.first_name, s.last_name, s.manager_staff_id
+FROM rental AS r
+INNER JOIN staff AS s on s.staff_id = r.staff_id;
+
+
+
+---------------------------------------------------------------------------------------------------------
+--This function is going to load the data into the summary table to find the 5 employees with the lowest rental sales rate within the company.
+
+INSERT INTO staff_rental_summary(
+SELECT staff_id,
+	CONCAT (first_name, ' ', last_name) AS staff_full_name
+	COUNT (staff_id)
+FROM Rental Details
+GROUP BY staff_id, staff_full_name
+HAVING COUNT (staff_id) > 1
+ORDER BY COUNT (staff_id) 
+LIMIT 5
+);
+
+
+---------------------------------------------------------------------------------------------------------
+--This function will clear the data from the summary table and refresh is with new data from the detailed table
+
+CREATE FUNCTION refresh_summary()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+
+--clear the summary table first
+DELECT FROM staff_rental_summary;
+
+INSERT INTO staff_rental_summary(
+SELECT staff_id,
+	CONCAT (first_name, ' ', last_name) AS staff_full_name
+	COUNT (staff_id)
+FROM Rental Details
+GROUP BY staff_id, staff_full_name
+HAVING COUNT (staff_id) > 1
+ORDER BY COUNT (staff_id) 
+LIMIT 5
+);
+
+RETURN NEW
+END; $$
+
+
+---------------------------------------------------------------------------------------------------------
+--To use the function created above a trigger must be create to tell the database when to initiate the event
+
+CREATE TRIGGER refresh_summary
+AFTER INSERT ON rental_details
+FOR EACH STATEMENT
+EXECUTE PROCEDURE refresh_summary();
+
+
+---------------------------------------------------------------------------------------------------------
+
+
+CREATE PROCEDURE table_refresh()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+
+--delete all data from rental detals table
+
+DELETE FROM rental_details;
+
+--Reinsert the detailed table data
+
+INSERT INTO rental_details(
+	rental_id, store_id, staff_id, first_name, last_name, email, manager_staff_id)
+SELECT r.rental_id, r.rental_date, s.store_id, s.staff_id, s.first_name, s.last_name, s.manager_staff_id
+FROM rental AS r
+INNER JOIN staff AS s on s.staff_id = r.staff_id;
+
+END;$$
+
+
+--To use the procedure:
+CALL table_refresh();
+
+
+--When the prodecure is inititated it will automatically trigger the refresh_summary funuction 
+--because the detailed table is having data inserted into it
+
+---------------------------------------------------------------------------------------------------------
+--View both detailed and summary tables to analyse data for business question
+
+SELECT *
+FROM rental_details;
+
+SELECT *
+FROM staff_rental_summary;
